@@ -82,7 +82,6 @@ func onUserMessage(conn *websocket.Conn, r *http.Request) {
 
 	if err := conn.ReadJSON(&msg); err != nil {
 		handleSafeWSError(err, r, conn)
-		//handleWSError(err, conn)
 		return
 	}
 
@@ -134,10 +133,10 @@ func handleSafeWSError(err error, r *http.Request, conn *websocket.Conn) {
 
 	if conn != nil {
 		if err := conn.WriteJSON(Msg{Err: err.Error()}); err != nil {
-			log.Printf("Write Json Error %s\n", err)
+			log.Printf("Safe Write Json Error %s\n", err)
 		}
 	} else {
-		log.Println("Websocket Connection is nil")
+		log.Println("Safe Websocket Connection is nil")
 	}
 
 	onDisconnect(r, conn)
@@ -147,7 +146,7 @@ func handleWSError(err error, conn *websocket.Conn) {
 
 	if conn != nil {
 		if err := conn.WriteJSON(Msg{Err: err.Error()}); err != nil {
-			log.Println(err)
+			log.Printf("Handle WebSocket Error: %s\n\n", err)
 		}
 	} else {
 		log.Println("Websocket Connection is nil")
