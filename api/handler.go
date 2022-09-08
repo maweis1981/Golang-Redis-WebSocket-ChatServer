@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"time"
 	"tower/devices"
 	. "tower/models"
 )
@@ -16,11 +17,12 @@ var connectedUsers = make(map[string]*devices.Plane)
 func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
-
 	if err != nil {
 		handleWSError(err, conn)
 		return
 	}
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
 	defer conn.Close()
 
 	err = onConnect(r, conn)
