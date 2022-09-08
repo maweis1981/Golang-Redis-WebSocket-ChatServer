@@ -21,9 +21,26 @@ func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		handleWSError(err, conn)
 		return
 	}
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(40 * time.Second))
+	conn.SetWriteDeadline(time.Now().Add(45 * time.Second))
 
-	defer conn.Close()
+	conn.SetPingHandler(func(message string) error {
+		conn.WriteControl(websocket.PongMessage, []byte(message), time.Time{})
+		return nil
+	})
+
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(40 * time.Second))
+		return nil
+	})
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
+
+	//defer conn.Close()
 
 	err = onConnect(r, conn)
 	if err != nil {
