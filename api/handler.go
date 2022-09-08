@@ -16,10 +16,12 @@ var connectedUsers = make(map[string]*devices.Plane)
 func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
+
 	if err != nil {
 		handleWSError(err, conn)
 		return
 	}
+	defer conn.Close()
 
 	err = onConnect(r, conn)
 	if err != nil {
@@ -28,7 +30,6 @@ func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	closeCh := onDisconnect(r, conn)
-
 	onChannelMessage(conn, r)
 
 loop:
@@ -133,7 +134,7 @@ func handleSafeWSError(err error, r *http.Request, conn *websocket.Conn) {
 
 	if conn != nil {
 		if err := conn.WriteJSON(Msg{Err: err.Error()}); err != nil {
-			log.Println(err)
+			log.Printf("Write Json Error %s\n", err)
 		}
 	} else {
 		log.Println("Websocket Connection is nil")
