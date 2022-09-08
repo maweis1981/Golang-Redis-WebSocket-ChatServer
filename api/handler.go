@@ -76,13 +76,14 @@ func onDisconnect(r *http.Request, conn *websocket.Conn) chan struct{} {
 func onUserMessage(conn *websocket.Conn, r *http.Request) {
 	var msg Msg
 
-	if err := conn.ReadJSON(&msg); err != nil {
-		handleWSError(err, conn)
-		return
-	}
-
 	username := mux.Vars(r)["device"]
 	u := connectedUsers[username]
+
+	if err := conn.ReadJSON(&msg); err != nil {
+		handleSafeWSError(err, r, conn)
+		//handleWSError(err, conn)
+		return
+	}
 
 	switch msg.Command {
 	case CommandSubscribe:
@@ -126,6 +127,19 @@ func onChannelMessage(conn *websocket.Conn, r *http.Request) {
 			}
 		}
 	}()
+}
+
+func handleSafeWSError(err error, r *http.Request, conn *websocket.Conn) {
+
+	if conn != nil {
+		if err := conn.WriteJSON(Msg{Err: err.Error()}); err != nil {
+			log.Println(err)
+		}
+	} else {
+		log.Println("Websocket Connection is nil")
+	}
+
+	onDisconnect(r, conn)
 }
 
 func handleWSError(err error, conn *websocket.Conn) {

@@ -1,10 +1,10 @@
 # Golang-Redis-WebSocket-ChatServer
-Chat service using Redis, Golang and websockets
+Signal service using Redis, Golang and websockets
 
 
 ## Design Decisions
-1. The chat service allows users to subscribe to multiple channels.
-1. Redis client opens a TCP connection per subscription which requires opening too many connections from the chat service to Redis if we open a connection for each channel as user subscribers to.
+1. The Signal service allows devices to subscribe to multiple channels.
+1. Redis client opens a TCP connection per subscription which requires opening too many connections from the signal service to Redis if we open a connection for each channel as user subscribers to.
 To avoid this, whenever the user subscribes to a new channel, I have to cancel the old subscription and subscribe to all user channels at once. (Redis allow subscribe to multiple channels at once)
 1. The chat service registers all connected users in two channels by default “general” and “random” (following slack conventions). The user can subscribe to any arbitrary channel at any time, and only users subscribed to such channels can see the messages.
 1. I used WebSockets to handle the communication between the JavaScript client and the Golang Service.
