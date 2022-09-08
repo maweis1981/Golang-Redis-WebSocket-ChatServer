@@ -87,6 +87,7 @@ func onUserMessage(conn *websocket.Conn, r *http.Request) {
 	u := connectedUsers[username]
 
 	if err := conn.ReadJSON(&msg); err != nil {
+		log.Printf("ReadJson Error [%s] \n", err)
 		handleSafeWSError(err, r, conn)
 		return
 	}
@@ -129,7 +130,7 @@ func onChannelMessage(conn *websocket.Conn, r *http.Request) {
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {
-				log.Println("Client Disconnect %n\n", err)
+				log.Printf("Client Disconnect Error [%s] ", err)
 				delete(connectedUsers, username)
 			}
 		}
