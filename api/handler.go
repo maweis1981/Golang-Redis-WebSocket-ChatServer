@@ -47,10 +47,16 @@ func onConnect(r *http.Request, conn *websocket.Conn) error {
 	username := mux.Vars(r)["device"]
 	log.Println("connected from:", conn.RemoteAddr(), "devices:", username)
 
+	if uc, exists := connectedUsers[username]; exists {
+		log.Printf("User %s exist, Disconnect first.\n", username)
+		uc.Disconnect(username)
+	}
+
 	u, err := devices.Connect(username)
 	if err != nil {
 		return err
 	}
+
 	connectedUsers[username] = u
 	return nil
 }
@@ -123,7 +129,8 @@ func onChannelMessage(conn *websocket.Conn, r *http.Request) {
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {
-				log.Println(err)
+				log.Println("Client Disconnect %n\n", err)
+				delete(connectedUsers, username)
 			}
 		}
 	}()
