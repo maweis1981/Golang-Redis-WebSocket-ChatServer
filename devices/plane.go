@@ -1,4 +1,4 @@
-package user
+package devices
 
 import (
 	"errors"
@@ -10,9 +10,9 @@ import (
 
 const (
 	// used to track users that used chat. mainly for listing users in the /users api, in real world chat app
-	// such user list should be separated into user management module.
+	// such devices list should be separated into devices management module.
 	usersKey       = "users"
-	userChannelFmt = "user:%s:channels"
+	userChannelFmt = "devices:%s:channels"
 	ChannelsKey    = "channels"
 )
 
@@ -26,7 +26,7 @@ var rdb = redis.NewClient(&redis.Options{
 	PoolTimeout:  30 * time.Second,
 })
 
-type User struct {
+type Plane struct {
 	Name            string
 	channelsHandler *redis.PubSub
 
@@ -36,14 +36,14 @@ type User struct {
 	MessageChan chan redis.Message
 }
 
-//Connect connect user to user channels on redis
-func Connect(name string) (*User, error) {
+//Connect connect devices to devices channels on redis
+func Connect(name string) (*Plane, error) {
 
 	if _, err := rdb.SAdd(usersKey, name).Result(); err != nil {
 		return nil, err
 	}
 
-	u := &User{
+	u := &Plane{
 		Name:             name,
 		stopListenerChan: make(chan struct{}),
 		MessageChan:      make(chan redis.Message),
@@ -56,7 +56,7 @@ func Connect(name string) (*User, error) {
 	return u, nil
 }
 
-func (u *User) Subscribe(channel string) error {
+func (u *Plane) Subscribe(channel string) error {
 
 	userChannelsKey := fmt.Sprintf(userChannelFmt, u.Name)
 
@@ -70,7 +70,7 @@ func (u *User) Subscribe(channel string) error {
 	return u.connect()
 }
 
-func (u *User) Unsubscribe(channel string) error {
+func (u *Plane) Unsubscribe(channel string) error {
 
 	userChannelsKey := fmt.Sprintf(userChannelFmt, u.Name)
 
@@ -84,11 +84,11 @@ func (u *User) Unsubscribe(channel string) error {
 	return u.connect()
 }
 
-func (u *User) connect() error {
+func (u *Plane) connect() error {
 
 	var c []string
 
-	log.Println("User Connect Invoke.")
+	log.Println("Plane Connect Invoke.")
 
 	c1, err := rdb.SMembers(ChannelsKey).Result()
 	if err != nil {
@@ -96,7 +96,7 @@ func (u *User) connect() error {
 	}
 	c = append(c, c1...)
 
-	// get all user channels (from DB) and start subscribe
+	// get all devices channels (from DB) and start subscribe
 	c2, err := rdb.SMembers(fmt.Sprintf(userChannelFmt, u.Name)).Result()
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (u *User) connect() error {
 	c = append(c, c2...)
 
 	if len(c) == 0 {
-		log.Println("no channels to connect to for user: ", u.Name)
+		log.Println("no channels to connect to for devices: ", u.Name)
 		return nil
 	}
 
@@ -123,7 +123,7 @@ func (u *User) connect() error {
 	return u.doConnect(c...)
 }
 
-func (u *User) doConnect(channels ...string) error {
+func (u *Plane) doConnect(channels ...string) error {
 	// subscribe all channels in one request
 	pubSub := rdb.Subscribe(channels...)
 	// keep channel handler to be used in unsubscribe
@@ -132,10 +132,10 @@ func (u *User) doConnect(channels ...string) error {
 	// The Listener
 	go func() {
 		u.listening = true
-		log.Println("starting the listener for user:", u.Name, "on channels:", channels)
+		log.Println("starting the listener for devices:", u.Name, "on channels:", channels)
 
-		if err := Chat("general", u.Name+" Connected"); err != nil {
-			log.Printf("User Connect Error: %s \n", err)
+		if err := SendCommand("general", u.Name+" Connected"); err != nil {
+			log.Printf("Plane Connect Error: %s \n", err)
 		}
 
 		for {
@@ -147,7 +147,7 @@ func (u *User) doConnect(channels ...string) error {
 				u.MessageChan <- *msg
 
 			case <-u.stopListenerChan:
-				log.Println("stopping the listener for user:", u.Name)
+				log.Println("stopping the listener for devices:", u.Name)
 				return
 			}
 		}
@@ -155,7 +155,7 @@ func (u *User) doConnect(channels ...string) error {
 	return nil
 }
 
-func (u *User) Disconnect(userName string) error {
+func (u *Plane) Disconnect(userName string) error {
 	if u.channelsHandler != nil {
 		if err := u.channelsHandler.Unsubscribe(); err != nil {
 			return err
@@ -174,14 +174,14 @@ func (u *User) Disconnect(userName string) error {
 
 	close(u.MessageChan)
 
-	if err := Chat("general", u.Name+" DisConnected"); err != nil {
-		log.Printf("User Connect Error: %s \n", err)
+	if err := SendCommand("general", u.Name+" DisConnected"); err != nil {
+		log.Printf("Plane Connect Error: %s \n", err)
 	}
 
 	return nil
 }
 
-func Chat(channel string, content string) error {
+func SendCommand(channel string, content string) error {
 	return rdb.Publish(channel, content).Err()
 }
 
@@ -192,7 +192,7 @@ func List() ([]string, error) {
 func GetChannels(username string) ([]string, error) {
 
 	if !rdb.SIsMember(usersKey, username).Val() {
-		return nil, errors.New("user not exists")
+		return nil, errors.New("devices not exists")
 	}
 
 	var c []string
@@ -203,7 +203,7 @@ func GetChannels(username string) ([]string, error) {
 	}
 	c = append(c, c1...)
 
-	// get all user channels (from DB) and start subscribe
+	// get all devices channels (from DB) and start subscribe
 	c2, err := rdb.SMembers(fmt.Sprintf(userChannelFmt, username)).Result()
 	if err != nil {
 		return nil, err

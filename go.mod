@@ -1,4 +1,4 @@
-module chat
+module tower
 
 go 1.13
 

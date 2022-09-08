@@ -1,17 +1,23 @@
+/**
+* API Handler
+*
+ */
+
 package api
 
 import (
-	"chat/user"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"net/http"
+	"tower/devices"
 )
 
-func UserChannelsHandler(w http.ResponseWriter, r *http.Request) {
-	username := mux.Vars(r)["user"]
+// DeviceChannelsHandler Path: /devices/{device}/channels
+func DeviceChannelsHandler(w http.ResponseWriter, r *http.Request) {
+	deviceToken := mux.Vars(r)["device"]
 
-	list, err := user.GetChannels(username)
+	list, err := devices.GetChannels(deviceToken)
 	if err != nil {
 		handleError(err, w)
 		return
@@ -21,12 +27,12 @@ func UserChannelsHandler(w http.ResponseWriter, r *http.Request) {
 		handleError(err, w)
 		return
 	}
-
 }
 
-func UsersHandler(w http.ResponseWriter, r *http.Request) {
+// DeviceHandler Path: /devices
+func DeviceHandler(w http.ResponseWriter, r *http.Request) {
 
-	list, err := user.List()
+	list, err := devices.List()
 	if err != nil {
 		handleError(err, w)
 		return

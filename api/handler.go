@@ -1,32 +1,19 @@
 package api
 
 import (
-	"chat/user"
-	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"tower/devices"
+	. "tower/models"
 )
 
 var upgrader websocket.Upgrader
 
-var connectedUsers = make(map[string]*user.User)
+var connectedUsers = make(map[string]*devices.Plane)
 
-type msg struct {
-	Content string `json:"content,omitempty"`
-	Channel string `json:"channel,omitempty"`
-	Command int    `json:"command,omitempty"`
-	Err     string `json:"err,omitempty"`
-}
-
-const (
-	commandSubscribe = iota
-	commandUnsubscribe
-	commandChat
-)
-
-func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
+func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -56,11 +43,10 @@ loop:
 }
 
 func onConnect(r *http.Request, conn *websocket.Conn) error {
-	//username := r.URL.Query()["username"][0]
-	username := mux.Vars(r)["username"]
-	log.Println("connected from:", conn.RemoteAddr(), "user:", username)
+	username := mux.Vars(r)["device"]
+	log.Println("connected from:", conn.RemoteAddr(), "devices:", username)
 
-	u, err := user.Connect(username)
+	u, err := devices.Connect(username)
 	if err != nil {
 		return err
 	}
@@ -71,11 +57,9 @@ func onConnect(r *http.Request, conn *websocket.Conn) error {
 func onDisconnect(r *http.Request, conn *websocket.Conn) chan struct{} {
 
 	closeCh := make(chan struct{})
-
-	//username := r.URL.Query()["username"][0]
-	username := mux.Vars(r)["username"]
+	username := mux.Vars(r)["device"]
 	conn.SetCloseHandler(func(code int, text string) error {
-		log.Println("connection closed for user", username)
+		log.Println("connection closed for devices", username)
 
 		u := connectedUsers[username]
 		if err := u.Disconnect(username); err != nil {
@@ -90,36 +74,35 @@ func onDisconnect(r *http.Request, conn *websocket.Conn) chan struct{} {
 }
 
 func onUserMessage(conn *websocket.Conn, r *http.Request) {
-	var msg msg
+	var msg Msg
 
 	if err := conn.ReadJSON(&msg); err != nil {
 		handleWSError(err, conn)
 		return
 	}
 
-	//username := r.URL.Query()["username"][0]
-	username := mux.Vars(r)["username"]
+	username := mux.Vars(r)["device"]
 	u := connectedUsers[username]
 
 	switch msg.Command {
-	case commandSubscribe:
+	case CommandSubscribe:
 		if err := u.Subscribe(msg.Channel); err != nil {
 			handleWSError(err, conn)
 		}
-	case commandUnsubscribe:
+	case CommandUnsubscribe:
 		if err := u.Unsubscribe(msg.Channel); err != nil {
 			handleWSError(err, conn)
 		}
-	case commandChat:
-		if err := user.Chat(msg.Channel, msg.Content); err != nil {
+	case CommandChat:
+		if err := devices.SendCommand(msg.Channel, msg.Content); err != nil {
 			handleWSError(err, conn)
 		}
 	}
 }
 
 func onChannelMessage(conn *websocket.Conn, r *http.Request) {
-	//username := r.URL.Query()["username"][0]
-	username := mux.Vars(r)["username"]
+	username := mux.Vars(r)["device"]
+
 	log.Printf(username + " OnChannelMessage \n")
 	log.Printf("online users length [%d] \n", len(connectedUsers))
 
@@ -133,13 +116,13 @@ func onChannelMessage(conn *websocket.Conn, r *http.Request) {
 		for m := range u.MessageChan {
 			log.Printf("On Channel Message %s, %s, %s\n", u.Name, m.Payload, m.Channel)
 
-			msg := msg{
+			msg := Msg{
 				Content: m.Payload,
 				Channel: m.Channel,
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
 		}
 	}()
@@ -148,11 +131,11 @@ func onChannelMessage(conn *websocket.Conn, r *http.Request) {
 func handleWSError(err error, conn *websocket.Conn) {
 
 	if conn != nil {
-		if err := conn.WriteJSON(msg{Err: err.Error()}); err != nil {
-			fmt.Println(err)
+		if err := conn.WriteJSON(Msg{Err: err.Error()}); err != nil {
+			log.Println(err)
 		}
 	} else {
-		fmt.Println("Websocket Connection is nil")
+		log.Println("Websocket Connection is nil")
 	}
 
 }

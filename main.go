@@ -1,20 +1,20 @@
 package main
 
 import (
-	"chat/api"
-	"chat/rdcon"
 	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"os"
+	"tower/api"
+	"tower/rdcon"
 )
 
 const (
 	// used to track users that used chat. mainly for listing users in the /users api, in real world chat app
-	// such user list should be separated into user management module.
+	// such devices list should be separated into devices management module.
 	usersKey       = "users"
-	userChannelFmt = "user:%s:channels"
+	userChannelFmt = "devices:%s:channels"
 	ChannelsKey    = "channels"
 )
 
@@ -24,9 +24,10 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.Path("/ws/{username}").Methods("GET").HandlerFunc(api.ChatWebSocketHandler)
-	r.Path("/user/{user}/channels").Methods("GET").HandlerFunc(api.UserChannelsHandler)
-	r.Path("/users").Methods("GET").HandlerFunc(api.UsersHandler)
+	r.Path("/ws/{device}").Methods("GET").HandlerFunc(api.DeviceWebSocketHandler)
+
+	r.Path("/devices/{device}/channels").Methods("GET").HandlerFunc(api.DeviceChannelsHandler)
+	r.Path("/devices").Methods("GET").HandlerFunc(api.DeviceHandler)
 
 	port := ":" + os.Getenv("PORT")
 	if port == ":" {
