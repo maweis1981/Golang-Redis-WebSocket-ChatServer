@@ -16,7 +16,7 @@ const (
 	ChannelsKey    = "channels"
 )
 
-//rdb = redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+// rdb = redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 var rdb = redis.NewClient(&redis.Options{
 	Addr:         "localhost:6379",
 	DialTimeout:  10 * time.Second,
@@ -36,7 +36,7 @@ type Plane struct {
 	MessageChan chan redis.Message
 }
 
-//Connect connect devices to devices channels on redis
+// Connect connect devices to devices channels on redis
 func Connect(name string) (*Plane, error) {
 
 	if _, err := rdb.SAdd(usersKey, name).Result(); err != nil {

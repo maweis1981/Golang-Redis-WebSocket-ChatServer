@@ -24,7 +24,12 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.Path("/ws/{device}").Methods("GET").HandlerFunc(api.DeviceWebSocketHandler)
+	hub := api.NewHub()
+	go hub.Run()
+
+	r.Path("/ws/{device}").Methods("GET").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		api.DeviceWebSocketHandler(hub, w, r)
+	})
 
 	r.Path("/devices/{device}/channels").Methods("GET").HandlerFunc(api.DeviceChannelsHandler)
 	r.Path("/devices").Methods("GET").HandlerFunc(api.DeviceHandler)
