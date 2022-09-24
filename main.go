@@ -31,7 +31,7 @@ func main() {
 
 	port := ":" + os.Getenv("PORT")
 	if port == ":" {
-		port = ":8080"
+		port = "0.0.0.0:7000"
 	}
 	fmt.Println("chat service started on port", port)
 	log.Fatal(http.ListenAndServe(port, r))

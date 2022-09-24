@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-redis/redis/v7"
+	"github.com/gorilla/websocket"
 	"log"
 	"time"
 )
@@ -27,26 +28,27 @@ var rdb = redis.NewClient(&redis.Options{
 })
 
 type Plane struct {
-	Name            string
-	channelsHandler *redis.PubSub
+	Name                string
+	channelsHandler     *redis.PubSub
+	webSocketConnection *websocket.Conn
 
 	stopListenerChan chan struct{}
 	listening        bool
-
-	MessageChan chan redis.Message
+	MessageChan      chan redis.Message
 }
 
 //Connect connect devices to devices channels on redis
-func Connect(name string) (*Plane, error) {
+func Connect(name string, conn *websocket.Conn) (*Plane, error) {
 
 	if _, err := rdb.SAdd(usersKey, name).Result(); err != nil {
 		return nil, err
 	}
 
 	u := &Plane{
-		Name:             name,
-		stopListenerChan: make(chan struct{}),
-		MessageChan:      make(chan redis.Message),
+		Name:                name,
+		stopListenerChan:    make(chan struct{}),
+		MessageChan:         make(chan redis.Message),
+		webSocketConnection: conn,
 	}
 
 	if err := u.connect(); err != nil {
@@ -177,6 +179,8 @@ func (u *Plane) Disconnect(userName string) error {
 	if err := SendCommand("general", u.Name+" DisConnected"); err != nil {
 		log.Printf("Plane Connect Error: %s \n", err)
 	}
+
+	u.webSocketConnection.Close()
 
 	return nil
 }
