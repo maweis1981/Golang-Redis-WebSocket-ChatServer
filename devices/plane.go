@@ -30,7 +30,7 @@ var rdb = redis.NewClient(&redis.Options{
 type Plane struct {
 	Name                string
 	channelsHandler     *redis.PubSub
-	webSocketConnection *websocket.Conn
+	WebSocketConnection *websocket.Conn
 
 	stopListenerChan chan struct{}
 	listening        bool
@@ -48,7 +48,7 @@ func Connect(name string, conn *websocket.Conn) (*Plane, error) {
 		Name:                name,
 		stopListenerChan:    make(chan struct{}),
 		MessageChan:         make(chan redis.Message),
-		webSocketConnection: conn,
+		WebSocketConnection: conn,
 	}
 
 	if err := u.connect(); err != nil {
@@ -157,7 +157,7 @@ func (u *Plane) doConnect(channels ...string) error {
 	return nil
 }
 
-func (u *Plane) Disconnect(userName string) error {
+func (u *Plane) Disconnect() error {
 	if u.channelsHandler != nil {
 		if err := u.channelsHandler.Unsubscribe(); err != nil {
 			return err
@@ -170,7 +170,7 @@ func (u *Plane) Disconnect(userName string) error {
 		u.stopListenerChan <- struct{}{}
 	}
 
-	if err := rdb.SRem(usersKey, userName).Err(); err != nil {
+	if err := rdb.SRem(usersKey, u.Name).Err(); err != nil {
 		return err
 	}
 
@@ -180,7 +180,7 @@ func (u *Plane) Disconnect(userName string) error {
 		log.Printf("Plane Connect Error: %s \n", err)
 	}
 
-	u.webSocketConnection.Close()
+	u.WebSocketConnection.Close()
 
 	return nil
 }

@@ -40,7 +40,7 @@ type Handler struct {
 	//connectedUsers map[string]*devices.Plane
 	userName            string          `json:"device"`
 	webSocketConnection *websocket.Conn `json:"web_socket_connection"`
-	//send                chan string
+	send                chan []byte
 }
 
 var connectedUsers = make(map[string]*devices.Plane)
@@ -58,17 +58,18 @@ func unRegisterAndCloseConnection(c *websocket.Conn) {
 func (h *Handler) readPump() {
 	log.Println("readPump Running.")
 	defer func() {
+		log.Println("defer connection closed")
 		h.webSocketConnection.Close()
 	}()
 	defer unRegisterAndCloseConnection(h.webSocketConnection)
-	setSocketPayloadReadConfig(h.webSocketConnection)
 
 	for {
+		log.Println("ReadPump Working...................")
 		_, payload, err := h.webSocketConnection.ReadMessage()
 
-		log.Printf("payload Size :\t %v \n", len(payload))
-		log.Printf("payload Body :\t %v \n", payload)
-		log.Printf("Error : [%n]", err)
+		//log.Printf("payload Size :\t %v \n", len(payload))
+		//log.Printf("payload Body :\t %v \n", payload)
+		//log.Printf("Error : [%s]", err)
 
 		//if len(payload) > 0 {
 		//decoder := json.NewDecoder(bytes.NewReader(payload))
@@ -83,10 +84,17 @@ func (h *Handler) readPump() {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error ===: %v", err)
 			}
+			log.Printf("Read Pump Error ===: #{err}")
 			break
 		}
 		payload = bytes.TrimSpace(bytes.Replace(payload, newline, space, -1))
-		log.Println("Read Message %n", payload)
+		log.Println("Read Message : " + string(payload))
+
+		//h.webSocketConnection.WriteJSON("connection normal.")
+
+		log.Println("Read User Connection Name " + h.userName)
+		log.Println("Read User Connection Remote " + h.webSocketConnection.RemoteAddr().String())
+		log.Println("Read User Connection Local " + h.webSocketConnection.LocalAddr().String())
 
 		h.executeCommand(payload)
 
@@ -110,16 +118,38 @@ func (h *Handler) writePump() {
 		ticker.Stop()
 		h.webSocketConnection.Close()
 	}()
+
 	for {
 		select {
+		case message, ok := <-h.send:
+			log.Println("writePump Message Now")
+			h.webSocketConnection.SetWriteDeadline(time.Now().Add(writeWait))
+
+			if !ok {
+				h.webSocketConnection.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			w, err := h.webSocketConnection.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+			if err := w.Close(); err != nil {
+				return
+			}
+
 		case <-ticker.C:
 			log.Println("writePump Ticker Now")
 			h.webSocketConnection.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := h.webSocketConnection.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Println("Write Pump Error [%n]", err)
+				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
+					log.Println("websocket.ticker: client side closed socket " + h.userName)
+				} else {
+					log.Println("websocket.ticker: closing " + h.userName + ", " + err.Error())
+				}
 				return
 			} else {
-				log.Println("Write Message %n", websocket.PingMessage)
+				log.Printf("Write Message %d", websocket.PingMessage)
 			}
 		}
 	}
@@ -137,7 +167,10 @@ func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	h := &Handler{
 		userName:            username,
 		webSocketConnection: conn,
+		send:                make(chan []byte, 256),
 	}
+
+	setSocketPayloadReadConfig(h.webSocketConnection)
 
 	go h.readPump()
 	go h.writePump()
@@ -149,7 +182,7 @@ func DeviceWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//closeCh := onDisconnect(r, conn)
-	go h.onChannelMessage()
+	h.onChannelMessage()
 	//
 	//loop:
 	//	for {
@@ -172,7 +205,7 @@ func onConnect(r *http.Request, conn *websocket.Conn) error {
 	// if the same user connect, the old connection will be disconnect.
 	if uc, exists := connectedUsers[username]; exists {
 		log.Printf("User %s exist, Disconnect first.\n", username)
-		uc.Disconnect(username)
+		uc.Disconnect()
 	}
 
 	u, err := devices.Connect(username, conn)
@@ -188,11 +221,11 @@ func onDisconnect(r *http.Request, conn *websocket.Conn) chan struct{} {
 
 	closeCh := make(chan struct{})
 	username := mux.Vars(r)["device"]
-	conn.SetCloseHandler(func(code int, text string) error {
-		log.Println("connection closed for devices", username)
+	log.Println("connection closed for devices", username)
 
+	conn.SetCloseHandler(func(code int, text string) error {
 		u := connectedUsers[username]
-		if err := u.Disconnect(username); err != nil {
+		if err := u.Disconnect(); err != nil {
 			return err
 		}
 		delete(connectedUsers, username)
@@ -210,21 +243,26 @@ func (h *Handler) executeCommand(message []byte) {
 		log.Println(err)
 	}
 	log.Println(msg)
+	log.Println(msg.Command)
+	log.Println(msg.MessagePayload.Event)
+	log.Println(msg.SocketEventStruct.EventName)
+	log.Println(msg.SocketEventStruct.EventPayload)
 
 	u := connectedUsers[h.userName]
 	switch msg.Command {
 	case CommandSubscribe:
 
 		if err := u.Subscribe(msg.Channel); err != nil {
-			handleWSError(err, h.webSocketConnection)
+			handleWSError(err, u.WebSocketConnection)
 		}
 	case CommandUnsubscribe:
 		if err := u.Unsubscribe(msg.Channel); err != nil {
-			handleWSError(err, h.webSocketConnection)
+			handleWSError(err, u.WebSocketConnection)
 		}
 	case CommandChat:
-		if err := devices.SendCommand(msg.Channel, msg.Content); err != nil {
-			handleWSError(err, h.webSocketConnection)
+		m, _ := json.Marshal(msg)
+		if err := devices.SendCommand(msg.Channel, string(m)); err != nil {
+			handleWSError(err, u.WebSocketConnection)
 		}
 	}
 }
@@ -285,10 +323,17 @@ func (h *Handler) onChannelMessage() {
 			}
 			//conn.WriteJSON(msg)
 			//
-			if err := h.webSocketConnection.WriteJSON(msg); err != nil {
-				log.Printf("Client Disconnect Error [%s] ", err)
-				//	delete(connectedUsers, username)
-			}
+			log.Println("User Connection Name " + u.Name + " == " + h.userName)
+			log.Println("User Connection Remote " + u.WebSocketConnection.RemoteAddr().String() + " == " + h.webSocketConnection.RemoteAddr().String())
+			log.Println("User Connection Local " + u.WebSocketConnection.LocalAddr().String() + " == " + h.webSocketConnection.LocalAddr().String())
+
+			h.send <- []byte(msg.Content)
+			//if err := h.webSocketConnection.WriteJSON(msg); err != nil {
+			//if err := h.webSocketConnection.WriteJSON(msg); err != nil {
+			//	log.Printf("Client Disconnect Error [%s] ", err)
+			//	u.Disconnect()
+			//	delete(connectedUsers, h.userName)
+			//}
 		}
 	}()
 }
